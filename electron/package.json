@@ -1,0 +1,55 @@
+{
+  "name": "savemyprompt",
+  "productName": "SaveMyPrompt",
+  "version": "1.0.0",
+  "description": "Hover-to-save prompt library for ChatGPT & Claude desktop (menu bar app).",
+  "main": "main.js",
+  "author": "SaveMyPrompt Team",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "helper": "cd ../swift-helper && ./build.sh",
+    "start": "electron .",
+    "dev": "SMP_DEV=1 electron .",
+    "dist": "npm run helper && electron-builder --mac dmg",
+    "pack": "electron-builder --dir"
+  },
+  "dependencies": {
+    "googleapis": "^144.0.0"
+  },
+  "devDependencies": {
+    "electron": "^32.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "ai.savemyprompt.app",
+    "productName": "SaveMyPrompt",
+    "files": [
+      "main.js",
+      "preload.js",
+      "lib/**/*",
+      "renderer/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      { "from": "resources/hoverhelper", "to": "hoverhelper" }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": ["dmg"],
+      "icon": "assets/icon.icns",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null,
+      "extendInfo": {
+        "LSUIElement": true,
+        "NSAppleEventsUsageDescription": "SaveMyPrompt reads the message under your cursor in ChatGPT and Claude to let you save it.",
+        "com.apple.security.automation.apple-events": true
+      }
+    },
+    "dmg": {
+      "title": "SaveMyPrompt",
+      "sign": false
+    }
+  }
+}

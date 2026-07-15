@@ -1,0 +1,21 @@
+# Node
+electron/node_modules/
+electron/dist/
+
+# Swift build output
+swift-helper/.build/
+swift-helper/Package.resolved
+
+# Bundled helper binary (rebuilt by `npm run helper`)
+electron/resources/hoverhelper
+
+# Secrets — never commit real OAuth creds or tokens
+electron/credentials.json
+**/tokens.json
+**/settings.json
+
+# QA / scratch
+electron/renderer/_qa-button.html
+
+# macOS
+.DS_Store

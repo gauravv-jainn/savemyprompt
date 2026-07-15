@@ -1,0 +1,8 @@
+{
+  "_comment": "Optional. Copy to the app's userData dir (~/Library/Application Support/SaveMyPrompt/settings.json) to override defaults. Most teams only set driveRootFolderId — create ONE 'Prompt Library' folder in Drive, share it with the team, and paste its folder id here so everyone reads/writes the same library.",
+  "ollamaUrl": "http://localhost:11434",
+  "ollamaModel": "llama3.1:8b",
+  "driveRootFolderId": null,
+  "driveRootFolderName": "Prompt Library",
+  "driveScope": "https://www.googleapis.com/auth/drive"
+}

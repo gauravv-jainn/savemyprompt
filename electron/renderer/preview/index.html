@@ -1,0 +1,86 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="../shared/theme.css" />
+  <link rel="stylesheet" href="preview.css" />
+</head>
+<body>
+  <div class="card-shell" id="shell">
+    <div class="header">
+      <span class="logo" id="logo"></span>
+      <span id="wordmark"></span>
+      <span class="spacer"></span>
+      <button class="icon-btn" id="close" title="Cancel"></button>
+    </div>
+
+    <div class="body">
+      <div class="preview-title-row">
+        <div class="eyebrow">Save to Library</div>
+        <div class="src" id="src"></div>
+      </div>
+
+      <div id="notice" class="notice hidden"></div>
+
+      <div class="scroll fields" id="fields">
+        <label class="field">
+          <span class="field-label">Title</span>
+          <input id="f-title" class="input" placeholder="Short name for this prompt" />
+        </label>
+
+        <label class="field">
+          <span class="field-label">Prompt <em id="conf" class="conf"></em></span>
+          <textarea id="f-prompt" class="input area" rows="4"
+            placeholder="The effective prompt…"></textarea>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Reusable template</span>
+          <textarea id="f-template" class="input area" rows="4"
+            placeholder="Version with [PLACEHOLDERS]…"></textarea>
+        </label>
+
+        <label class="field">
+          <span class="field-label">Folder</span>
+          <div class="folder-pick">
+            <input id="f-folder" class="input" list="folderlist" placeholder="Category / client" />
+            <datalist id="folderlist"></datalist>
+          </div>
+          <div class="chips suggested" id="folder-suggest"></div>
+        </label>
+
+        <div class="field">
+          <span class="field-label">Tags</span>
+          <div class="chips" id="tags"></div>
+          <input id="f-tag" class="input tag-input" placeholder="Add a tag and press Enter" />
+        </div>
+
+        <div class="field">
+          <span class="field-label">Output file <span class="opt">optional</span></span>
+          <button id="attach" class="attach-btn" type="button">
+            <span id="attach-ico"></span><span id="attach-label">Attach an image or file…</span>
+          </button>
+        </div>
+
+        <details class="context">
+          <summary id="ctx-summary">Captured context</summary>
+          <div id="ctx-body" class="ctx-body"></div>
+        </details>
+      </div>
+
+      <div class="footer">
+        <button class="btn ghost" id="cancel">Cancel</button>
+        <button class="btn primary" id="save" disabled>Save to Drive</button>
+      </div>
+    </div>
+
+    <div id="loading" class="loading-overlay">
+      <div class="spinner"></div>
+      <div class="loading-text">Cleaning up your prompt…</div>
+    </div>
+  </div>
+
+  <script src="../shared/icons.js"></script>
+  <script src="preview.js"></script>
+</body>
+</html>

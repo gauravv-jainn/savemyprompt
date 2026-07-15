@@ -1,0 +1,161 @@
+/* SaveMyPrompt — shared visual system.
+   Dark charcoal header over a white rounded card. Warm-yellow→teal gradient
+   accent. Rounded light-gray cards everywhere. Used by the save button,
+   the preview panel, and the browse panel so they read as one product. */
+
+:root {
+  --grad: linear-gradient(155deg, #f6c74a 0%, #f0a93c 34%, #3bb6a6 100%);
+  --grad-soft: linear-gradient(155deg, #f7d06a 0%, #6fc7bb 100%);
+  --charcoal: #2b2b2b;
+  --charcoal-2: #232323;
+  --ink: #1f2124;
+  --ink-2: #6c727c;
+  --ink-3: #9aa0aa;
+  --card: #f1f2f4;
+  --card-hover: #e9ebee;
+  --panel: #ffffff;
+  --line: #e7e9ec;
+  --radius-panel: 20px;
+  --radius-card: 14px;
+  --radius-pill: 999px;
+  --shadow-float: 0 18px 50px rgba(20, 22, 28, 0.30), 0 4px 14px rgba(20, 22, 28, 0.18);
+  --shadow-card: 0 1px 2px rgba(20, 22, 28, 0.05);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  font-family: var(--font);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+  overflow: hidden;
+}
+
+.gradient-text {
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* The floating card shell used by preview + panel. */
+.card-shell {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+  box-shadow: var(--shadow-float);
+  background: var(--panel);
+}
+
+/* Dark header bar with the wordmark. */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 15px;
+  background: var(--charcoal);
+  color: #fff;
+  -webkit-app-region: drag;
+}
+.header .icon-btn { -webkit-app-region: no-drag; }
+.header .logo { display: flex; align-items: center; }
+.wordmark {
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.2px;
+}
+
+/* Circular / square icon buttons. */
+.icon-btn {
+  border: none;
+  background: transparent;
+  color: inherit;
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.icon-btn:hover { background: rgba(255, 255, 255, 0.12); }
+.icon-btn.on-light:hover { background: rgba(0, 0, 0, 0.06); }
+.icon-btn svg { width: 17px; height: 17px; display: block; }
+
+.body {
+  flex: 1;
+  min-height: 0;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Light-gray rounded rows/cards. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 13px;
+  background: var(--card);
+  border-radius: var(--radius-card);
+  cursor: pointer;
+  transition: background 120ms ease, transform 120ms ease;
+}
+.row:hover { background: var(--card-hover); }
+.row:active { transform: scale(0.995); }
+.row .folder-ico { flex: 0 0 auto; }
+.row .row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.row .row-title { font-size: 14px; font-weight: 600; color: var(--ink); }
+.row .row-sub { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.link {
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  cursor: pointer;
+  align-self: center;
+  padding: 4px 6px;
+}
+
+/* "Drop your prompt.." tray pinned at the bottom. */
+.dropzone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 12px 12px;
+  padding: 13px 14px;
+  border: 1.5px dashed #d3d6db;
+  border-radius: var(--radius-card);
+  color: var(--ink-3);
+  font-size: 13px;
+  background: #fafbfc;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.dropzone:hover { border-color: #b9bdc4; background: #f4f6f8; }
+.dropzone.dragover { border-color: #3bb6a6; background: #eefaf8; color: #2b8f84; }
+
+/* Scrollbars */
+.scroll { overflow-y: auto; overflow-x: hidden; }
+.scroll::-webkit-scrollbar { width: 8px; }
+.scroll::-webkit-scrollbar-thumb { background: #d7dade; border-radius: 8px; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
