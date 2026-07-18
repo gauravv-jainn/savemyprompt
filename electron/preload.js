@@ -3,16 +3,16 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Channels the main process may push to renderers.
 const RX = new Set([
-  'button:show', 'button:hide',
   'preview:capture', 'preview:result', 'preview:error', 'preview:notice',
-  'panel:state', 'panel:refresh',
+  'panel:state', 'panel:refresh', 'panel:can-collect',
 ]);
 
 contextBridge.exposeInMainWorld('smp', {
   // ---- renderer -> main (request/response) ----
   openPreview: () => ipcRenderer.invoke('smp:open-preview'),
+  collect: () => ipcRenderer.invoke('smp:collect'),
+  hasHover: () => ipcRenderer.invoke('smp:has-hover'),
   closePreview: () => ipcRenderer.invoke('smp:close-preview'),
-  hideButton: () => ipcRenderer.send('smp:hide-button'),
   setPanelState: (state) => ipcRenderer.invoke('smp:panel-state', state),
 
   save: (payload) => ipcRenderer.invoke('smp:save', payload),

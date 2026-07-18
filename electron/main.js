@@ -42,6 +42,9 @@ const COMMON = {
   resizable: false,
   hasShadow: false,
   skipTaskbar: true,
+  // Deliver the first click even when the window isn't focused — otherwise the
+  // collapsed tab needs a click to activate + a second click to actually open.
+  acceptFirstMouse: true,
   webPreferences: {
     preload: path.join(__dirname, 'preload.js'),
     contextIsolation: true,
@@ -175,29 +178,15 @@ function wireBridge() {
   });
 
   bridge.on('hover', (ev) => {
-    if (!ev.anchor) return;
+    // No floating button — just remember the last message the user hovered so
+    // the panel's "Collect prompt" button knows what to grab.
     lastHover = { hovered: ev.hovered, anchor: ev.anchor, app: ev.app };
-    showButtonAt(ev.anchor);
-    // User is actively reading a conversation — preload the model so the first
-    // save doesn't pay the cold-start cost (fire-and-forget, runs once).
+    send(panelWin, 'panel:can-collect', { text: (ev.hovered && ev.hovered.text) || '' });
     ollama.warm();
   });
 
-  bridge.on('clear', () => {
-    // Keep the button alive while the cursor is over it (the helper reports
-    // "no message" because our own window is now under the cursor).
-    if (buttonWin && buttonWin.isVisible()) {
-      const pt = screen.getCursorScreenPoint();
-      const b = buttonWin.getBounds();
-      const pad = 12;
-      if (pt.x >= b.x - pad && pt.x <= b.x + b.width + pad &&
-          pt.y >= b.y - pad && pt.y <= b.y + b.height + pad) {
-        return;
-      }
-    }
-    lastHover = null;
-    hideButtonSoon();
-  });
+  // Intentionally keep lastHover after 'clear' so the user can move the cursor
+  // off the message and over to the panel to collect it.
 
   bridge.start();
 }
@@ -224,6 +213,20 @@ async function openPreviewFlow() {
     dialog.showErrorBox('Nothing to save', 'Could not read the message under the cursor.');
     return { ok: false };
   }
+
+  // Diagnostic: log exactly what was captured so we can see mis-grabs.
+  log.info('CAPTURE hovered:', JSON.stringify({
+    author: capture.hovered.author,
+    role: capture.hovered.role,
+    dom: (capture.hovered.domClass || []).slice(0, 5),
+    len: (capture.hovered.text || '').length,
+    head: (capture.hovered.text || '').slice(0, 200),
+    tail: (capture.hovered.text || '').slice(-80),
+  }));
+  log.info('CAPTURE context(' + (capture.context || []).length + '):',
+    JSON.stringify((capture.context || []).map((m) => ({
+      a: m.author, len: (m.text || '').length, head: (m.text || '').slice(0, 70),
+    }))));
 
   showPreview();
   if (previewReady) await previewReady; // don't send before the renderer loads
@@ -393,7 +396,8 @@ async function firstRunChecks() {
 
 function wireIpc() {
   ipcMain.handle('smp:open-preview', () => openPreviewFlow());
-  ipcMain.on('smp:hide-button', () => { if (buttonWin) buttonWin.hide(); });
+  ipcMain.handle('smp:collect', () => openPreviewFlow());
+  ipcMain.handle('smp:has-hover', () => ({ ok: !!lastHover, text: lastHover && lastHover.hovered && lastHover.hovered.text }));
   ipcMain.handle('smp:close-preview', () => { if (previewWin) previewWin.hide(); });
 
   ipcMain.handle('smp:panel-state', (_e, state) => setPanelState(state));
@@ -455,7 +459,6 @@ if (!gotLock) {
     }
     wireIpc();
     createTray();
-    createButtonWindow();
     createPanelWindow();
     wireBridge();
     firstRunChecks();

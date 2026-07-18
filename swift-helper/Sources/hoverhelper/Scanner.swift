@@ -90,7 +90,134 @@ final class Scanner {
     }
 
     func textLength(_ el: AXUIElement) -> Int {
-        AX.collectText(el).count
+        messageText(el).count
+    }
+
+    // MARK: - Chrome-aware message text
+
+    /// AX roles that are UI chrome, never message content. Their subtrees are
+    /// skipped entirely when collecting a message's text.
+    static let chromeRoles: Set<String> = [
+        "AXButton", "AXPopUpButton", "AXMenuButton", "AXRadioButton", "AXCheckBox",
+        "AXTextField", "AXTextArea", "AXComboBox", "AXSearchField",
+        "AXToolbar", "AXMenu", "AXMenuBar", "AXMenuItem", "AXTabGroup", "AXSlider",
+    ]
+
+    /// Exact lines (lowercased) that are app chrome, not message text.
+    static let chromeLines: Set<String> = [
+        "write a message…", "write a message...", "reply to claude…", "reply to claude...",
+        "message chatgpt", "message claude", "send message", "send", "stop",
+        "chat mode", "type / for commands", "effort:", "extra", "medium", "high", "low",
+        "claude is ai and can make mistakes. please double-check responses.",
+        "chatgpt can make mistakes. check important info.",
+        "claude finished the response", "copy", "edit", "edited", "a file", "retry",
+        "good response", "bad response", "share", "regenerate",
+    ]
+
+    /// Line prefixes (lowercased) that mark status/announcer chrome.
+    static let chromePrefixes: [String] = [
+        "claude responded:", "claude finished", "chatgpt said:", "you said:",
+        "effort:", "thought for", "reasoned for", "searched",
+    ]
+
+    /// Collect a message's text: walk only content (AXStaticText / groups),
+    /// skipping chrome-role subtrees, dropping chrome lines, and de-duplicating
+    /// consecutive repeats (Chromium often exposes a value + a label twice).
+    func messageText(_ el: AXUIElement, limit: Int = 8000, maxDepth: Int = 22) -> String {
+        var parts: [String] = []
+        func walk(_ e: AXUIElement, _ depth: Int) {
+            if depth > maxDepth { return }
+            let r = AX.role(e)
+            if Scanner.chromeRoles.contains(r) { return } // skip toolbars/inputs/buttons
+            if r == (kAXStaticTextRole as String) {
+                let t = AX.text(e).trimmingCharacters(in: .whitespacesAndNewlines)
+                if !t.isEmpty { parts.append(t) }
+                return
+            }
+            // A group can carry its own value text too.
+            if let own = AX.string(e, kAXValueAttribute as String) {
+                let t = own.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !t.isEmpty { parts.append(t) }
+            }
+            for c in AX.children(e) { walk(c, depth + 1) }
+        }
+        walk(el, 0)
+
+        var out: [String] = []
+        for p in parts {
+            let low = p.lowercased()
+            if Scanner.chromeLines.contains(low) { continue }
+            if Scanner.chromePrefixes.contains(where: { low.hasPrefix($0) }) { continue }
+            if low.count <= 3, low.allSatisfy({ $0.isNumber }) { continue } // stray counters
+            if out.last == p { continue }                                   // consecutive dup
+            out.append(p)
+        }
+        var text = out.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.count > limit { text = String(text.prefix(limit)) + "…" }
+        return text
+    }
+
+    // MARK: - Message identification by DOM class
+
+    /// Class-name fragments that mark a real message turn / content in the two
+    /// supported apps. Used to snap to the correct element instead of guessing.
+    static let messageMarkers: [String] = [
+        "font-claude-message", "font-user-message", "font-claude-response",
+        "user-query", "agent-turn", "message-content", "markdown", "prose",
+        "whitespace-pre-wrap", "user-message-bubble",
+    ]
+
+    func matchesMessageMarker(_ el: AXUIElement) -> Bool {
+        let cls = (domClassList(el) ?? []).joined(separator: " ").lowercased()
+        if cls.isEmpty { return false }
+        return Scanner.messageMarkers.contains { cls.contains($0) }
+    }
+
+    /// Is the cursor inside the message composer (input box)? If so, we never
+    /// offer to save — that's chrome, not a saved prompt.
+    func isInComposer(_ target: AXUIElement) -> Bool {
+        var cur = target
+        for _ in 0..<8 {
+            let r = AX.role(cur)
+            if r == "AXTextArea" || r == "AXTextField" || r == "AXSearchField" { return true }
+            let cls = (domClassList(cur) ?? []).joined(separator: " ").lowercased()
+            if cls.contains("composer") || cls.contains("ProseMirror".lowercased()) { return true }
+            guard let p = AX.element(cur, kAXParentAttribute as String) else { break }
+            cur = p
+        }
+        return false
+    }
+
+    /// Walk up to the nearest ancestor that is a real message turn (by DOM class).
+    /// Returns (container, item) where container holds sibling turns for context.
+    func messageByDOM(from target: AXUIElement) -> (container: AXUIElement, item: AXUIElement)? {
+        var cur = target
+        var item: AXUIElement?
+        for _ in 0..<24 {
+            if matchesMessageMarker(cur) { item = cur; break }
+            guard let p = AX.element(cur, kAXParentAttribute as String),
+                  AX.role(p) != (kAXApplicationRole as String) else { break }
+            cur = p
+        }
+        guard let msg = item else { return nil }
+        // Container = nearest ancestor that has >= 2 message-marked descendants,
+        // else the message's parent.
+        var c = AX.element(msg, kAXParentAttribute as String) ?? msg
+        for _ in 0..<6 {
+            let markedKids = AX.children(c).filter { descendantHasMarker($0, depth: 4) }
+            if markedKids.count >= 2 { break }
+            guard let p = AX.element(c, kAXParentAttribute as String),
+                  AX.role(p) != (kAXApplicationRole as String) else { break }
+            c = p
+        }
+        return (c, msg)
+    }
+
+    private func descendantHasMarker(_ el: AXUIElement, depth: Int) -> Bool {
+        if matchesMessageMarker(el) { return true }
+        if depth <= 0 { return false }
+        for c in AX.children(el) where descendantHasMarker(c, depth: depth - 1) { return true }
+        return false
     }
 
     /// Given the element under the cursor, find (conversationContainer, messageItem).
@@ -98,6 +225,11 @@ final class Scanner {
     /// conversation turns (>= 2 children each holding a meaningful chunk of text);
     /// the item is the child of that container on our path.
     func messageContainerAndItem(from target: AXUIElement) -> (container: AXUIElement, item: AXUIElement)? {
+        // Never treat the composer/input as a message.
+        if isInComposer(target) { return nil }
+        // Prefer snapping to a real message turn by its DOM class.
+        if let dom = messageByDOM(from: target) { return dom }
+        // Fallback heuristic (chrome-aware textLength now excludes buttons/inputs).
         let chain = ancestry(of: target)
         for i in 0..<max(0, chain.count - 1) {
             let item = chain[i]
@@ -148,9 +280,14 @@ final class Scanner {
     }
 
     func messageInfo(_ item: AXUIElement, textLimit: Int = 8000) -> MessageInfo {
-        var text = AX.collectText(item)
-        if text.count > textLimit { text = String(text.prefix(textLimit)) + "…" }
-        return MessageInfo(author: author(of: item), text: text, frame: rect(item))
+        let text = messageText(item, limit: textLimit)
+        return MessageInfo(
+            author: author(of: item),
+            text: text,
+            frame: rect(item),
+            role: AX.role(item),
+            domClass: domClassList(item)
+        )
     }
 
     // MARK: - Hover sampling
@@ -165,11 +302,52 @@ final class Scanner {
         let key: String
     }
 
+    func pidOf(_ el: AXUIElement) -> pid_t {
+        var p: pid_t = 0
+        AXUIElementGetPid(el, &p)
+        return p
+    }
+
+    /// For browsers: is the hovered element inside a chatgpt.com / claude.ai page?
+    /// Reads the enclosing web area's URL (precise); falls back to the window title.
+    func isOnAIChat(from el: AXUIElement) -> Bool {
+        var cur = el
+        var windowTitle: String?
+        for _ in 0..<60 {
+            let role = AX.role(cur)
+            if role == "AXWebArea",
+               let u = AX.attr(cur, "AXURL"),
+               let host = (u as? NSURL)?.host {
+                return Targets.isAIHost(host)
+            }
+            if role == (kAXWindowRole as String) {
+                windowTitle = AX.string(cur, kAXTitleAttribute as String)
+            }
+            guard let p = AX.element(cur, kAXParentAttribute as String) else { break }
+            cur = p
+        }
+        if let t = windowTitle?.lowercased() {
+            return t.contains("claude") || t.contains("chatgpt")
+        }
+        return false
+    }
+
     /// Sample once. Returns a HoverResult if a message is under the cursor.
     func sampleHover() -> HoverResult? {
         guard let focus = frontmostTarget() else { return nil }
         let mouse = mouseLocation()
         guard let target = elementAt(mouse) else { return nil }
+        // Validity gate depends on the surface:
+        switch focus.target.kind {
+        case .desktop:
+            // The element must belong to the ChatGPT/Claude process — not our own
+            // always-on-top panel or any other window under the pointer.
+            let ownerPid = pidOf(target)
+            guard ownerPid == focus.app.processIdentifier, ownerPid != getpid() else { return nil }
+        case .browser:
+            // Only fire when the browser is actually on an AI-chat page.
+            guard isOnAIChat(from: target) else { return nil }
+        }
         guard let (container, item) = messageContainerAndItem(from: target) else { return nil }
         let msg = messageInfo(item)
         guard !msg.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }

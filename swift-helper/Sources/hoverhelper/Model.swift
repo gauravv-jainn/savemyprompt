@@ -25,6 +25,8 @@ struct MessageInfo: Codable {
     var author: String?          // "user" | "assistant" | nil
     var text: String
     var frame: Rect?
+    var role: String?            // AX role of the chosen element (diagnostics)
+    var domClass: [String]?      // Chromium DOM class list (diagnostics)
 }
 
 enum EventKind: String, Codable {

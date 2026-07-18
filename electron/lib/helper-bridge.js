@@ -27,6 +27,10 @@ class HelperBridge extends EventEmitter {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 
+    // Swallow async pipe errors (EPIPE when the helper has exited) so writing
+    // "capture"/"quit" can never crash the main process.
+    this.proc.stdin.on('error', () => {});
+
     const rl = readline.createInterface({ input: this.proc.stdout });
     rl.on('line', (line) => this._onLine(line));
 

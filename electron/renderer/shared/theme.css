@@ -1,26 +1,52 @@
-/* SaveMyPrompt — shared visual system.
-   Dark charcoal header over a white rounded card. Warm-yellow→teal gradient
-   accent. Rounded light-gray cards everywhere. Used by the save button,
-   the preview panel, and the browse panel so they read as one product. */
+/* SaveMyPrompt — Liquid Glass design system.
+   Translucent, frosted surfaces that blur the desktop behind the transparent
+   Electron windows. Warm-yellow→teal gradient accent. One system across the
+   save button, preview, and browse panel. */
 
 :root {
-  --grad: linear-gradient(155deg, #f6c74a 0%, #f0a93c 34%, #3bb6a6 100%);
-  --grad-soft: linear-gradient(155deg, #f7d06a 0%, #6fc7bb 100%);
-  --charcoal: #2b2b2b;
-  --charcoal-2: #232323;
-  --ink: #1f2124;
-  --ink-2: #6c727c;
-  --ink-3: #9aa0aa;
-  --card: #f1f2f4;
-  --card-hover: #e9ebee;
-  --panel: #ffffff;
-  --line: #e7e9ec;
-  --radius-panel: 20px;
-  --radius-card: 14px;
+  --grad: linear-gradient(135deg, #f8ce57 0%, #f3ad3e 30%, #37bda9 100%);
+  --grad-warm: linear-gradient(135deg, #f8ce57, #f2a13c);
+  --accent-teal: #2fb3a4;
+
+  /* Glass surfaces — frosted (opaque milky), so dialogs aren't see-through. */
+  --glass: rgba(247, 248, 251, 0.88);
+  --glass-strong: rgba(250, 250, 252, 0.93);
+  --glass-header: rgba(28, 29, 34, 0.86);
+  --glass-card: rgba(255, 255, 255, 0.66);
+  --glass-card-hover: rgba(255, 255, 255, 0.86);
+  --glass-inset: rgba(255, 255, 255, 0.50);
+  --blur: saturate(180%) blur(30px);
+  --blur-strong: saturate(200%) blur(40px);
+
+  /* Ink */
+  --ink: #1b1d21;
+  --ink-2: #565b64;
+  --ink-3: #8a909b;
+  --on-dark: #f4f5f7;
+
+  /* Lines + light */
+  --hairline: rgba(255, 255, 255, 0.55);
+  --hairline-soft: rgba(255, 255, 255, 0.30);
+  --stroke: rgba(20, 22, 28, 0.08);
+  --stroke-2: rgba(20, 22, 28, 0.12);
+
+  --radius-panel: 26px;
+  --radius-card: 16px;
   --radius-pill: 999px;
-  --shadow-float: 0 18px 50px rgba(20, 22, 28, 0.30), 0 4px 14px rgba(20, 22, 28, 0.18);
-  --shadow-card: 0 1px 2px rgba(20, 22, 28, 0.05);
+
+  --shadow-float: 0 28px 80px rgba(12, 14, 20, 0.38), 0 6px 20px rgba(12, 14, 20, 0.20);
+  --shadow-card: 0 1px 1px rgba(255, 255, 255, 0.5) inset, 0 1px 3px rgba(15, 17, 22, 0.06);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+
+  /* Back-compat aliases mapped onto the glass system. */
+  --charcoal: rgba(30, 31, 36, 0.66);
+  --card: var(--glass-card);
+  --card-hover: var(--glass-card-hover);
+  --line: var(--stroke);
+  --panel: var(--glass-strong);
+  --grad-soft: var(--grad-warm);
 }
 
 * { box-sizing: border-box; }
@@ -43,81 +69,85 @@ html, body {
   color: transparent;
 }
 
-/* The floating card shell used by preview + panel. */
+/* The floating glass shell used by preview + panel. */
 .card-shell {
   display: flex;
   flex-direction: column;
   border-radius: var(--radius-panel);
   overflow: hidden;
-  box-shadow: var(--shadow-float);
-  background: var(--panel);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--blur-strong);
+  backdrop-filter: var(--blur-strong);
+  box-shadow: var(--shadow-float), var(--highlight);
+  border: 1px solid var(--hairline-soft);
 }
 
-/* Dark header bar with the wordmark. */
+/* Dark frosted header with the wordmark. */
 .header {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 13px 15px;
-  background: var(--charcoal);
-  color: #fff;
+  padding: 14px 16px;
+  background: var(--glass-header);
+  -webkit-backdrop-filter: saturate(160%) blur(20px);
+  backdrop-filter: saturate(160%) blur(20px);
+  color: var(--on-dark);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   -webkit-app-region: drag;
 }
 .header .icon-btn { -webkit-app-region: no-drag; }
-.header .logo { display: flex; align-items: center; }
-.wordmark {
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: -0.2px;
-}
+.header .logo { display: flex; align-items: center; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.25)); }
+.wordmark { font-weight: 700; font-size: 15px; letter-spacing: -0.2px; }
 
-/* Circular / square icon buttons. */
+/* Icon buttons. */
 .icon-btn {
   border: none;
   background: transparent;
   color: inherit;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 9px;
   cursor: pointer;
-  transition: background 120ms ease;
+  transition: background 140ms ease, transform 140ms ease;
 }
-.icon-btn:hover { background: rgba(255, 255, 255, 0.12); }
-.icon-btn.on-light:hover { background: rgba(0, 0, 0, 0.06); }
+.icon-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn.on-light:hover { background: rgba(20, 22, 28, 0.06); }
 .icon-btn svg { width: 17px; height: 17px; display: block; }
 
 .body {
   flex: 1;
   min-height: 0;
-  background: var(--panel);
   display: flex;
   flex-direction: column;
 }
 
-/* Light-gray rounded rows/cards. */
+/* Glass rows/cards. */
 .row {
   display: flex;
   align-items: center;
   gap: 12px;
   padding: 12px 13px;
-  background: var(--card);
+  background: var(--glass-card);
+  border: 1px solid var(--hairline-soft);
   border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
   cursor: pointer;
-  transition: background 120ms ease, transform 120ms ease;
+  transition: background 140ms ease, transform 140ms ease, box-shadow 140ms ease;
 }
-.row:hover { background: var(--card-hover); }
+.row:hover { background: var(--glass-card-hover); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(15,17,22,0.10); }
 .row:active { transform: scale(0.995); }
-.row .folder-ico { flex: 0 0 auto; }
+.row .folder-ico { flex: 0 0 auto; filter: drop-shadow(0 2px 4px rgba(20,22,28,0.12)); }
 .row .row-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .row .row-title { font-size: 14px; font-weight: 600; color: var(--ink); }
 .row .row-sub { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .link {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   background: var(--grad);
   -webkit-background-clip: text;
   background-clip: text;
@@ -127,35 +157,29 @@ html, body {
   padding: 4px 6px;
 }
 
-/* "Drop your prompt.." tray pinned at the bottom. */
+/* "Drop your prompt.." glass tray. */
 .dropzone {
   display: flex;
   align-items: center;
   gap: 10px;
   margin: 8px 12px 12px;
   padding: 13px 14px;
-  border: 1.5px dashed #d3d6db;
+  border: 1.5px dashed rgba(20, 22, 28, 0.18);
   border-radius: var(--radius-card);
   color: var(--ink-3);
   font-size: 13px;
-  background: #fafbfc;
+  background: rgba(255, 255, 255, 0.28);
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
 }
-.dropzone:hover { border-color: #b9bdc4; background: #f4f6f8; }
-.dropzone.dragover { border-color: #3bb6a6; background: #eefaf8; color: #2b8f84; }
+.dropzone:hover { border-color: rgba(20,22,28,0.30); background: rgba(255,255,255,0.5); }
+.dropzone.dragover { border-color: var(--accent-teal); background: rgba(55, 189, 169, 0.12); color: #1f8a79; }
 
 /* Scrollbars */
 .scroll { overflow-y: auto; overflow-x: hidden; }
 .scroll::-webkit-scrollbar { width: 8px; }
-.scroll::-webkit-scrollbar-thumb { background: #d7dade; border-radius: 8px; }
+.scroll::-webkit-scrollbar-thumb { background: rgba(20,22,28,0.18); border-radius: 8px; }
+.scroll::-webkit-scrollbar-thumb:hover { background: rgba(20,22,28,0.28); }
 .scroll::-webkit-scrollbar-track { background: transparent; }
 
-@keyframes pop-in {
-  from { opacity: 0; transform: scale(0.6); }
-  to { opacity: 1; transform: scale(1); }
-}
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+@keyframes fade-up { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }

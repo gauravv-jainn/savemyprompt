@@ -6,6 +6,7 @@ if (!window.smp) {
     listPrompts: async () => DEMO.prompts, search: async () => DEMO.prompts,
     copyPrompt: async () => ({ ok: true }), authStatus: async () => ({ signedIn: true }),
     signIn: async () => ({ signedIn: true }), save: async () => ({ promptId: 'x' }),
+    collect: async () => ({ ok: true }), hasHover: async () => ({ ok: false }),
   };
 }
 const I = window.SMPIcons;
@@ -18,6 +19,42 @@ el('logo').innerHTML = I.bookmark(20);
 el('wordmark').innerHTML = I.wordmark();
 el('searchico').innerHTML = I.search();
 el('dropico').innerHTML = I.tray(20);
+// Stroke "collect" glyph (bookmark + down arrow) — inherits currentColor so it
+// stays visible on both the glass (idle) and gradient (ready) states.
+el('collect-ico').innerHTML = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none"
+  stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M7 3.6h10A1.6 1.6 0 0 1 18.6 5.2V20.2a.5.5 0 0 1-.77.42L12 17l-5.83 3.62A.5.5 0 0 1 5.4 20.2V5.2A1.6 1.6 0 0 1 7 3.6Z"/>
+  <path d="M12 7.4v4.6m0 0-1.8-1.8M12 12l1.8-1.8"/></svg>`;
+
+// ---------------- Collect prompt (replaces the floating hover button) --------
+const collectBtn = el('collect');
+function setCollectReady(ready, snippet) {
+  collectBtn.classList.toggle('ready', !!ready);
+  const hint = el('collect-hint');
+  if (ready) {
+    const s = (snippet || '').replace(/\s+/g, ' ').trim();
+    hint.textContent = s ? `“${s.slice(0, 42)}${s.length > 42 ? '…' : ''}”` : 'Ready — click to collect';
+  } else {
+    hint.textContent = 'Hover a message in ChatGPT / Claude, then click';
+  }
+}
+window.smp.on('panel:can-collect', (d) => setCollectReady(true, d && d.text));
+collectBtn.onclick = async () => {
+  let state;
+  try { state = await window.smp.hasHover(); } catch { state = null; }
+  if (!state || !state.ok) {
+    toast('Hover a message in ChatGPT or Claude first');
+    setCollectReady(false);
+    return;
+  }
+  toast('Collecting…');
+  try {
+    await window.smp.collect();          // main captures + runs the model + opens preview
+    window.smp.setPanelState('collapsed');
+  } catch (e) {
+    toast('Collect failed');
+  }
+};
 
 const S = {
   state: 'collapsed',
@@ -37,9 +74,8 @@ window.smp.on('panel:state', (state) => {
 });
 window.smp.on('panel:refresh', () => { if (S.state === 'expanded') refresh(); });
 
+// The tab stays a fixed, clear glass chip — no hover grow. Click opens the panel.
 const tab = el('tab');
-tab.addEventListener('mouseenter', () => { if (S.state === 'collapsed') window.smp.setPanelState('hint'); });
-tab.addEventListener('mouseleave', () => { if (S.state === 'hint') window.smp.setPanelState('collapsed'); });
 tab.addEventListener('click', () => window.smp.setPanelState('expanded'));
 
 // ---------------- header nav ----------------
@@ -92,6 +128,7 @@ el('drop').addEventListener('drop', () => { S.view = 'compose'; render(); });
 
 // ---------------- boot / refresh ----------------
 async function boot() {
+  try { const hv = await window.smp.hasHover(); setCollectReady(hv && hv.ok, hv && hv.text); } catch {}
   const auth = await window.smp.authStatus();
   S.signedIn = auth.signedIn;
   render();
@@ -319,9 +356,10 @@ const DEMO = _demo();
 
 // In standalone preview mode, jump straight to expanded root.
 if (location.search.includes('preview')) {
-  // QA backdrop so the transparent-window floating card reads.
+  // QA backdrop so the frosted-glass blur is visible in a plain browser.
   document.documentElement.style.background =
-    'repeating-linear-gradient(135deg,#3a3f4a 0 22px,#343945 22px 44px)';
+    'linear-gradient(135deg,#5b6cf0 0%,#a066e8 30%,#f0629b 60%,#f7a24b 100%)';
+  document.documentElement.style.backgroundAttachment = 'fixed';
   S.signedIn = true;
   let start = 'expanded';
   if (location.search.includes('collapsed')) start = 'collapsed';

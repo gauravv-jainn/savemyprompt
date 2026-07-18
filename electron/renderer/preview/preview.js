@@ -191,6 +191,8 @@ el('save').onclick = async () => {
 
 // ---- standalone visual QA (?demo) ----
 if (location.search.includes('demo')) {
+  document.documentElement.style.background =
+    'linear-gradient(135deg,#5b6cf0 0%,#a066e8 30%,#f0629b 60%,#f7a24b 100%)';
   applyCapture({
     app: { name: 'ChatGPT' },
     hovered: { text: 'make me a product photo of the new sneaker on a white background' },

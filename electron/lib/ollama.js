@@ -106,12 +106,20 @@ ${hovered.text}
 Return ONLY a JSON object with EXACTLY these keys:
 {
   "extracted_prompt": "the effective prompt this message represents, folding in any refinements or constraints established earlier in the conversation, cleaned up and self-contained",
-  "generalized_template": "a reusable version of that prompt with [SQUARE_BRACKET_PLACEHOLDERS] where instance-specific details (client names, product, dates, dimensions, style specifics) should go",
-  "suggested_folder": "the single best match from the existing folders above; propose a NEW short folder name only if none genuinely fit",
-  "tags": ["3 to 6 short lowercase tags, preferring the common tags above when they apply"],
+  "generalized_template": "a reusable version of that prompt with [SQUARE_BRACKET_PLACEHOLDERS] where instance-specific details (client names, product, dates, numbers, locations, style specifics) should go",
+  "suggested_folder": "a short 1-3 word category naming what this prompt is FOR (its topic/use-case)",
+  "tags": ["3 to 5 lowercase topical tags"],
   "confidence": "high or low"
 }
-Rules: output valid JSON only, no prose, no markdown fences. Keep placeholders in ALL_CAPS inside square brackets. If the message is an image-generation instruction, keep the visual details but placeholder the subject/brand specifics.`;
+
+Folder rules:
+- Choose an existing folder ONLY if it clearly describes this prompt's TOPIC or use-case. Do NOT match a folder just because it exists.
+- If no existing folder genuinely fits, invent a concise new one named after the domain/task (e.g. "Real Estate Copy", "Ad Headlines", "Image Generation"). A good new folder beats a bad match.
+
+Tag rules:
+- Tags describe the prompt's domain + task (e.g. ["real-estate", "sales-script", "copywriting"]). Prefer the common tags above only when they truly apply. No generic filler like "prompt", "ai", "text".
+
+Output rules: valid JSON only, no prose, no markdown fences. Keep placeholders in ALL_CAPS inside square brackets. For image-generation prompts, keep the visual/style details but placeholder the subject/brand specifics.`;
 }
 
 function coerceResult(raw) {
