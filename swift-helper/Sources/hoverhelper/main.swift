@@ -25,6 +25,7 @@ struct Options {
     var interval: TimeInterval = 0.12
     var dumpTree = false
     var scan = false
+    var probe = false
     var delay: Double = 0
     var depth = 70
 
@@ -42,6 +43,7 @@ struct Options {
                 if i < argv.count, let ms = Double(argv[i]) { o.interval = ms / 1000.0 }
             case "--dump-tree": o.dumpTree = true
             case "--scan": o.scan = true
+            case "--probe": o.probe = true
             case "--delay":
                 i += 1
                 if i < argv.count, let d = Double(argv[i]) { o.delay = d }
@@ -220,6 +222,59 @@ func targetWindowBounds(pid: pid_t) -> CGRect? {
 
 func escNL(_ s: String) -> String {
     s.replacingOccurrences(of: "\n", with: "⏎").replacingOccurrences(of: "\t", with: " ")
+}
+
+// MARK: - Probe (diagnostic for browser support). Focus a browser on
+// claude.ai/chatgpt.com, run `hoverhelper --probe --delay 5`, then move the
+// mouse over a message — it reports what the accessibility tree exposes.
+if opts.probe {
+    if opts.delay > 0 {
+        FileHandle.standardError.write("waiting \(opts.delay)s — focus the browser on claude.ai / chatgpt.com and hover a message…\n".data(using: .utf8)!)
+        usleep(useconds_t(opts.delay * 1_000_000))
+    }
+    guard let app = NSWorkspace.shared.frontmostApplication else {
+        FileHandle.standardError.write("no frontmost app\n".data(using: .utf8)!); exit(1)
+    }
+    let match = Targets.match(app)
+    var out = ""
+    out += "frontmost app : \(app.localizedName ?? "?")  [\(app.bundleIdentifier ?? "?")]  pid \(app.processIdentifier)\n"
+    out += "matched target: \(match.map { "\($0.displayName) (\($0.kind))" } ?? "NOT A TARGET")\n"
+    Targets.enableWebAccessibility(pid: app.processIdentifier)
+    usleep(500_000)
+
+    let mouse = scanner.mouseLocation()
+    out += "mouse         : (\(Int(mouse.x)), \(Int(mouse.y)))\n"
+    guard let el = scanner.elementAt(mouse) else {
+        out += "element under cursor: NONE\n"; print(out); exit(0)
+    }
+    out += "element role  : \(AX.role(el))  ownerPid \(scanner.pidOf(el))\n"
+    out += "isOnAIChat    : \(scanner.isOnAIChat(from: el))\n\n"
+    out += "ancestry (cursor → up), marking web areas + URLs:\n"
+    var cur: AXUIElement? = el
+    var depth = 0
+    while let c = cur, depth < 60 {
+        let role = AX.role(c)
+        var line = "  \(depth)  \(role)"
+        if let sub = AX.string(c, kAXSubroleAttribute as String) { line += "/\(sub)" }
+        if role == "AXWebArea" {
+            if let u = AX.attr(c, "AXURL") {
+                let host = (u as? NSURL)?.host ?? "?"
+                let full = (u as? NSURL)?.absoluteString ?? "\(u)"
+                line += "  ← AXWebArea  URL=\(full)  host=\(host)"
+            } else {
+                line += "  ← AXWebArea  (no AXURL attribute)  attrs=[\(AX.attributeNames(c).prefix(12).joined(separator: ","))]"
+            }
+        }
+        if role == (kAXWindowRole as String) {
+            line += "  title=\"\(AX.string(c, kAXTitleAttribute as String) ?? "")\""
+        }
+        out += line + "\n"
+        cur = AX.element(c, kAXParentAttribute as String)
+        depth += 1
+    }
+    print(out)
+    FileHandle.standardError.write("probe done\n".data(using: .utf8)!)
+    exit(0)
 }
 
 // MARK: - Scan (diagnostic via hit-testing, which works where top-down doesn't).
