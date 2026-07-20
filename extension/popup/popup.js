@@ -20,9 +20,14 @@ $('search').addEventListener('input', (e) => {
 async function render() {
   $('back').style.display = st.view === 'root' ? 'none' : '';
   $('crumbs').innerHTML = '';
-  if (st.view === 'root') return renderRoot();
-  if (st.view === 'folder') return renderFolder();
-  if (st.view === 'search') return renderSearch();
+  try {
+    if (st.view === 'root') return await renderRoot();
+    if (st.view === 'folder') return await renderFolder();
+    if (st.view === 'search') return await renderSearch();
+  } catch (e) {
+    console.error('[SaveMyPrompt popup]', e);
+    $('content').innerHTML = `<div class="empty">Couldn't load library.<br>${(e && e.message) || e}</div>`;
+  }
 }
 
 async function renderRoot() {

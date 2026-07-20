@@ -247,17 +247,22 @@
   }
 
   async function saveAll(turns) {
-    const existing = await S.folderNames();
-    const targets = turns.filter((t) => t.author !== 'assistant');
-    const list = targets.length ? targets : turns;
-    for (const t of list) {
-      await S.savePrompt({
-        title: C.deriveTitle(t.text), prompt: C.clean(t.text), template: C.generalize(t.text),
-        folder: C.suggestFolder(t.text, existing), tags: C.suggestTags(t.text), source: SITE.name,
-      });
+    try {
+      const existing = await S.folderNames();
+      const targets = turns.filter((t) => t.author !== 'assistant');
+      const list = targets.length ? targets : turns;
+      for (const t of list) {
+        await S.savePrompt({
+          title: C.deriveTitle(t.text), prompt: C.clean(t.text), template: C.generalize(t.text),
+          folder: C.suggestFolder(t.text, existing), tags: C.suggestTags(t.text), source: SITE.name,
+        });
+      }
+      toast(`Saved ${list.length} prompt${list.length === 1 ? '' : 's'}`);
+      st.view = 'root'; render();
+    } catch (e) {
+      console.error('[SaveMyPrompt] save all failed:', e);
+      toast('Save failed: ' + (e && e.message ? e.message : e));
     }
-    toast(`Saved ${list.length} prompt${list.length === 1 ? '' : 's'}`);
-    st.view = 'root'; render();
   }
 
   // ---- library ----
@@ -372,9 +377,16 @@
       tags: dlgTags, source: SITE.name,
     };
     if (!payload.prompt) { toast('Prompt is empty'); return; }
-    await S.savePrompt(payload);
-    closeDialog(); toast('Saved to library');
-    if (st.open) render();
+    try {
+      await S.savePrompt(payload);
+      const n = (await S.all()).length;
+      closeDialog();
+      toast(`Saved ✓ — ${n} in library`);
+      if (st.open) render();
+    } catch (e) {
+      console.error('[SaveMyPrompt] save failed:', e);
+      toast('Save failed: ' + (e && e.message ? e.message : e));
+    }
   }
 
   let toastTimer;

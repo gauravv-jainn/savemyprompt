@@ -5,12 +5,27 @@
   const KEY = 'smp_library';
 
   function read() {
-    return new Promise((resolve) => {
-      chrome.storage.local.get(KEY, (o) => resolve((o && o[KEY]) || { prompts: [] }));
+    return new Promise((resolve, reject) => {
+      try {
+        if (!chrome || !chrome.storage || !chrome.storage.local) throw new Error('chrome.storage unavailable');
+        chrome.storage.local.get(KEY, (o) => {
+          const err = chrome.runtime && chrome.runtime.lastError;
+          if (err) return reject(new Error(err.message));
+          resolve((o && o[KEY]) || { prompts: [] });
+        });
+      } catch (e) { reject(e); }
     });
   }
   function write(lib) {
-    return new Promise((resolve) => chrome.storage.local.set({ [KEY]: lib }, resolve));
+    return new Promise((resolve, reject) => {
+      try {
+        chrome.storage.local.set({ [KEY]: lib }, () => {
+          const err = chrome.runtime && chrome.runtime.lastError;
+          if (err) return reject(new Error(err.message));
+          resolve();
+        });
+      } catch (e) { reject(e); }
+    });
   }
 
   function uid() {
