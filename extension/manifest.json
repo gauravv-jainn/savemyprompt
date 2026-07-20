@@ -21,14 +21,44 @@
   "host_permissions": [
     "https://claude.ai/*",
     "https://chatgpt.com/*",
-    "https://chat.openai.com/*"
+    "https://chat.openai.com/*",
+    "https://gemini.google.com/*",
+    "https://aistudio.google.com/*",
+    "https://perplexity.ai/*",
+    "https://www.perplexity.ai/*",
+    "https://poe.com/*",
+    "https://chat.deepseek.com/*",
+    "https://chat.mistral.ai/*",
+    "https://grok.com/*",
+    "https://x.com/i/grok*",
+    "https://copilot.microsoft.com/*",
+    "https://meta.ai/*",
+    "https://www.meta.ai/*",
+    "https://you.com/*",
+    "https://t3.chat/*",
+    "https://huggingface.co/chat/*"
   ],
   "content_scripts": [
     {
       "matches": [
         "https://claude.ai/*",
         "https://chatgpt.com/*",
-        "https://chat.openai.com/*"
+        "https://chat.openai.com/*",
+        "https://gemini.google.com/*",
+        "https://aistudio.google.com/*",
+        "https://perplexity.ai/*",
+        "https://www.perplexity.ai/*",
+        "https://poe.com/*",
+        "https://chat.deepseek.com/*",
+        "https://chat.mistral.ai/*",
+        "https://grok.com/*",
+        "https://x.com/i/grok*",
+        "https://copilot.microsoft.com/*",
+        "https://meta.ai/*",
+        "https://www.meta.ai/*",
+        "https://you.com/*",
+        "https://t3.chat/*",
+        "https://huggingface.co/chat/*"
       ],
       "js": ["lib/icons.js", "lib/clean.js", "lib/store.js", "lib/styles.js", "content/content.js"],
       "run_at": "document_idle"

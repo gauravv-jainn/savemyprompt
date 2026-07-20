@@ -1,9 +1,13 @@
 # SaveMyPrompt — Chrome Extension
 
-A hover-to-save prompt library for **ChatGPT** and **Claude**, right in the
-browser. Hover a message → open the side tab → **Collect prompt** → it cleans the
-prompt, builds a reusable `[PLACEHOLDER]` template, auto-suggests a folder + tags,
-you edit and save. Browse, search, and copy any saved prompt to your clipboard.
+A hover-to-save prompt library for LLM chat sites, right in the browser. **Hover
+any message → click the bookmark button** that appears → it cleans the prompt,
+builds a reusable `[PLACEHOLDER]` template, auto-suggests a folder + tags, you
+edit and save. Or **Scan this chat** to pull every prompt from the whole
+conversation at once. Browse, search, and copy any saved prompt to your clipboard.
+
+**Works on:** ChatGPT, Claude, Gemini, AI Studio, Perplexity, Poe, DeepSeek,
+Mistral, Grok, Copilot, Meta AI (+ a generic detector for other LLM chat pages).
 
 **No AI. No account. No servers.** All cleaning/templating is deterministic
 string/regex logic; the library is stored locally with `chrome.storage`.
@@ -23,9 +27,10 @@ detection just works — no macOS Accessibility API, no permissions, no pid gate
 Works in any Chromium browser (Chrome, Edge, Brave, Arc) via the same steps.
 
 ## How to use
-- **Save**: hover the message you want (it highlights) → click the right-edge tab
-  → **Collect prompt** → review the cleaned prompt + template + folder + tags →
-  **Save**.
+- **Save one**: hover any message → a **bookmark button** appears at its corner →
+  click it → review the cleaned prompt + template + folder + tags → **Save**.
+- **Save the whole chat**: click the right-edge tab → **Scan this chat** → every
+  message is listed with a **Save** each, plus **Save all prompts**.
 - **Add manually**: the **＋** in the panel header opens a blank editor.
 - **Browse**: click the tab → folders → grid/list of prompts.
 - **Copy**: click **Copy** on any prompt (or a grid card) to put it on your clipboard.

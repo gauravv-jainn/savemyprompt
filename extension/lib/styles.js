@@ -149,7 +149,40 @@ textarea.input { resize:vertical; line-height:1.45; min-height:64px; }
   border-radius:999px; box-shadow:0 10px 30px rgba(12,14,20,0.4); opacity:0; pointer-events:none; transition: opacity .18s, transform .18s; }
 .toast.show { opacity:1; transform: translateX(-50%) translateY(0); }
 
-/* subtle highlight on the message currently hovered in the page */
+/* Per-message hover save button (floats at a message's corner) */
+.hoverbtn { position: fixed; width: 30px; height: 30px; border-radius: 10px; z-index: 2147483647;
+  background: rgba(255,255,255,0.62); -webkit-backdrop-filter: saturate(180%) blur(18px); backdrop-filter: saturate(180%) blur(18px);
+  border: 1px solid rgba(255,255,255,0.7); box-shadow: 0 6px 18px rgba(12,14,20,0.28), inset 0 1px 0 rgba(255,255,255,0.7);
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  opacity: 0; transform: scale(.6); pointer-events: none; transition: opacity .15s ease, transform .18s cubic-bezier(.34,1.6,.5,1); }
+.hoverbtn.show { opacity: 1; transform: scale(1); pointer-events: auto; }
+.hoverbtn:hover { background: rgba(255,255,255,0.8); transform: scale(1.1); box-shadow: 0 8px 22px rgba(12,14,20,0.32), 0 0 0 3px rgba(55,189,169,0.28); }
+.hoverbtn svg { width: 17px; height: 17px; filter: drop-shadow(0 1px 2px rgba(20,22,28,0.18)); }
+
+/* Top action buttons in the panel */
+.actions { display: flex; gap: 8px; margin: 12px 14px 2px; }
+.actionbtn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 11px 12px;
+  border: 1px solid var(--hair); border-radius: 13px; background: rgba(255,255,255,0.42); color: var(--ink);
+  font-family: var(--font); font-size: 13px; font-weight: 700; cursor: pointer; transition: background .14s, transform .14s; }
+.actionbtn:hover { background: rgba(255,255,255,0.7); }
+.actionbtn:active { transform: scale(.98); }
+.actionbtn.primary { background: var(--grad); color: #fff; border-color: rgba(255,255,255,0.35); box-shadow: 0 8px 20px rgba(242,161,60,0.26); }
+.actionbtn .aico { display: flex; }
+.actionbtn.primary .aico { color: #fff; }
+.actionbtn .aico { color: var(--teal); }
+
+/* Scan list rows */
+.scanhead { display: flex; align-items: center; gap: 8px; padding: 4px 4px 2px; }
+.scanhead .count { font-size: 12px; color: var(--ink3); font-weight: 700; }
+.scanhead .saveall { margin-left: auto; font-size: 12px; font-weight: 700; cursor: pointer; }
+.scanrow { display: flex; gap: 10px; background: var(--card); border: 1px solid var(--hair); border-radius: 13px; padding: 10px 12px; align-items: flex-start; }
+.scanrow .role { flex: 0 0 auto; font-size: 9px; font-weight: 800; letter-spacing: .3px; text-transform: uppercase; color: #fff;
+  background: rgba(55,189,169,0.9); border-radius: 6px; padding: 2px 5px; margin-top: 1px; }
+.scanrow .role.assistant { background: rgba(120,120,130,0.8); }
+.scanrow .stext { flex: 1; min-width: 0; font-size: 12.5px; line-height: 1.4; color: var(--ink2); user-select: text;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.scanrow .ssave { flex: 0 0 auto; border: none; background: var(--grad); color: #fff; border-radius: 8px; padding: 5px 10px;
+  font-size: 11.5px; font-weight: 700; cursor: pointer; align-self: center; }
 `;
 
 /* Page-scoped highlight class (injected into the page, not the shadow root). */

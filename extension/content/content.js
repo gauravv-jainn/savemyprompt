@@ -1,55 +1,106 @@
-/* SaveMyPrompt content script — runs on claude.ai + chatgpt.com.
-   Detects messages via DOM selectors (reliable, no accessibility API),
-   collects the hovered prompt, cleans + templates it deterministically, and
-   stores it locally. Renders a Liquid Glass panel in a shadow root. */
+/* SaveMyPrompt content script — runs on many LLM chat sites.
+   - A hover button appears on EVERY message → one-click save.
+   - "Scan this chat" pulls every prompt from the whole conversation.
+   - Deterministic cleaning/templating (no AI); local chrome.storage library. */
 (function () {
   if (window.__smpLoaded) return;
   window.__smpLoaded = true;
 
   const I = window.SMPIcons, C = window.SMPClean, S = window.SMPStore;
-
-  // ---- site + selectors ----
   const host = location.host;
-  const SITE = window.__SMP_FORCE_SITE || (host.includes('claude.ai') ? 'claude'
-    : (host.includes('chatgpt.com') || host.includes('openai.com')) ? 'chatgpt' : null);
-  if (!SITE) return;
-  const SOURCE = SITE === 'claude' ? 'Claude' : 'ChatGPT';
 
-  const SEL = {
-    claude: {
-      message: '[data-testid="user-message"], .font-claude-message',
-      author: (el) => (el.closest('[data-testid="user-message"]') ? 'user' : 'assistant'),
-    },
-    chatgpt: {
-      message: '[data-message-author-role]',
-      author: (el) => {
-        const m = el.closest('[data-message-author-role]');
-        return m ? m.getAttribute('data-message-author-role') : null;
-      },
-    },
-  }[SITE];
+  // ---- site registry (tuned selectors where known; generic fallback else) ----
+  const SITES = {
+    'claude.ai': { name: 'Claude', user: '[data-testid="user-message"]', msg: '[data-testid="user-message"], .font-claude-message' },
+    'chatgpt.com': { name: 'ChatGPT', user: '[data-message-author-role="user"]', msg: '[data-message-author-role]' },
+    'chat.openai.com': { name: 'ChatGPT', user: '[data-message-author-role="user"]', msg: '[data-message-author-role]' },
+    'gemini.google.com': { name: 'Gemini', user: 'user-query, .query-text', msg: 'user-query, .query-text, model-response, .model-response-text, message-content' },
+    'aistudio.google.com': { name: 'AI Studio', user: '[data-turn-role="User"], .user-prompt-container', msg: '[data-turn-role], .turn-content' },
+    'perplexity.ai': { name: 'Perplexity', user: '[class*="whitespace-pre-line"]', msg: '[class*="whitespace-pre-line"], [class*="prose"]' },
+    'poe.com': { name: 'Poe', user: '[class*="humanMessageBubble"]', msg: '[class*="MessageBubble"], [class*="Message_"]' },
+    'chat.deepseek.com': { name: 'DeepSeek', user: '[class*="_user"], [class*="user-message"]', msg: '[class*="message"]' },
+    'chat.mistral.ai': { name: 'Mistral', user: '[data-message-author-role="user"]', msg: '[data-message-author-role]' },
+    'grok.com': { name: 'Grok', user: '[class*="message-bubble"][class*="user"], [class*="items-end"]', msg: '[class*="message-bubble"]' },
+    'copilot.microsoft.com': { name: 'Copilot', user: '[data-content="user-message"]', msg: '[data-content]' },
+    'meta.ai': { name: 'Meta AI', user: 'div[dir="auto"]', msg: 'div[dir="auto"]' },
+  };
 
+  function resolveSite() {
+    const h = (window.__SMP_FORCE_SITE || host).toLowerCase();
+    for (const key in SITES) if (h.includes(key)) return Object.assign({ generic: false }, SITES[key]);
+    const base = h.replace(/^www\./, '').split('.')[0] || 'AI';
+    return { name: base.charAt(0).toUpperCase() + base.slice(1), user: null, msg: null, generic: true };
+  }
+  const SITE = resolveSite();
+
+  // ---- text extraction ----
   function extractText(el) {
+    if (!el) return '';
     const clone = el.cloneNode(true);
-    clone.querySelectorAll('button, svg, [role="button"], .sr-only, [aria-hidden="true"], .absolute').forEach((n) => n.remove());
+    clone.querySelectorAll('button, svg, [role="button"], .sr-only, [aria-hidden="true"], .smp-ignore').forEach((n) => n.remove());
     return C.clean(clone.innerText || clone.textContent || '');
   }
+  const txt = (el) => extractText(el);
 
-  // ---- hover tracking ----
-  let lastHovered = null; // { el, text, author }
-  document.addEventListener('mouseover', (e) => {
-    const t = e.target;
-    if (!(t instanceof Element)) return;
-    const msg = t.closest(SEL.message);
-    if (!msg) return;
-    if (lastHovered && lastHovered.el === msg) return;
-    if (lastHovered && lastHovered.el) lastHovered.el.classList.remove('smp-hover-target');
-    const text = extractText(msg);
-    if (!text || text.length < 2) return;
-    msg.classList.add('smp-hover-target');
-    lastHovered = { el: msg, text, author: SEL.author(msg) };
-    setCollectReady(true, text);
-  }, true);
+  function authorOf(el) {
+    if (SITE.user) {
+      try { if (el.matches(SITE.user) || el.closest(SITE.user)) return 'user'; } catch (e) {}
+      return 'assistant';
+    }
+    const cls = String(el.className || '').toLowerCase() + ' ' + (el.getAttribute && (el.getAttribute('data-message-author-role') || '') );
+    if (/user|human|query|prompt|items-end/.test(cls)) return 'user';
+    if (/assistant|model|response|bot|\bai\b/.test(cls)) return 'assistant';
+    return null;
+  }
+
+  // Nearest message container to an element (site selector, else generic turn).
+  function messageAt(el) {
+    if (!(el instanceof Element)) return null;
+    if (SITE.msg) { try { const m = el.closest(SITE.msg); if (m) return m; } catch (e) {} }
+    let cur = el;
+    for (let i = 0; i < 14 && cur && cur !== document.body; i++) {
+      const len = txt(cur).length;
+      if (len >= 15 && len <= 8000) {
+        const p = cur.parentElement;
+        if (p) {
+          const sibs = [...p.children].filter((s) => { const l = txt(s).length; return l >= 15 && l <= 8000; });
+          if (sibs.length >= 2) return cur;
+        }
+      }
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+
+  // Every turn in the whole conversation.
+  function allTurns() {
+    let els = [];
+    if (SITE.msg) { try { els = [...document.querySelectorAll(SITE.msg)]; } catch (e) {} }
+    if (els.length < 2) els = genericTurns();
+    const seen = new Set();
+    return els
+      .map((el) => ({ el, text: extractText(el), author: authorOf(el) }))
+      .filter((t) => {
+        if (!t.text || t.text.length < 2) return false;
+        const k = t.text.slice(0, 80);
+        if (seen.has(k)) return false; seen.add(k); return true;
+      });
+  }
+
+  function genericTurns() {
+    const scope = document.querySelector('main, [role="main"], [class*="conversation"], [class*="thread"], [class*="messages"]') || document.body;
+    const groups = new Map();
+    scope.querySelectorAll('div, article, section, li').forEach((el) => {
+      const len = txt(el).length;
+      if (len < 15 || len > 8000) return;
+      const p = el.parentElement; if (!p) return;
+      if (!groups.has(p)) groups.set(p, []);
+      groups.get(p).push(el);
+    });
+    let best = [], n = 0;
+    for (const arr of groups.values()) if (arr.length > n) { n = arr.length; best = arr; }
+    return n >= 2 ? best : [];
+  }
 
   // ---- shadow DOM ----
   const rootHost = document.createElement('div');
@@ -59,17 +110,17 @@
   style.textContent = window.SMP_CSS;
   shadow.appendChild(style);
   (document.documentElement || document.body).appendChild(rootHost);
-
   const pageStyle = document.createElement('style');
   pageStyle.textContent = window.SMP_PAGE_CSS;
   (document.head || document.documentElement).appendChild(pageStyle);
 
-  const collectIco = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.6h10A1.6 1.6 0 0 1 18.6 5.2V20.2a.5.5 0 0 1-.77.42L12 17l-5.83 3.62A.5.5 0 0 1 5.4 20.2V5.2A1.6 1.6 0 0 1 7 3.6Z"/><path d="M12 7.4v4.6m0 0-1.8-1.8M12 12l1.8-1.8"/></svg>`;
+  const scanIco = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M20 7V5a1 1 0 0 0-1-1h-2M20 17v2a1 1 0 0 1-1 1h-2M4 12h16"/></svg>`;
   const plusIco = `<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
 
   const wrap = document.createElement('div');
   wrap.className = 'wrap';
   wrap.innerHTML = `
+    <div class="hoverbtn" id="hoverbtn" title="Save this message">${I.bookmark(17)}</div>
     <div class="fab" id="fab" title="SaveMyPrompt">${I.bookmark(22)}</div>
     <div class="panel hidden" id="panel">
       <div class="header">
@@ -81,12 +132,10 @@
         <button class="iconbtn" id="viewToggle" title="Toggle view" style="display:none"></button>
       </div>
       <div class="body">
-        <button class="collect" id="collect">
-          <span class="cico">${collectIco}</span>
-          <span class="ctext"><span class="ctitle">Collect prompt</span>
-            <span class="chint" id="chint">Hover a message, then click</span></span>
-        </button>
-        <div class="searchbar">${I.search()}<input id="search" placeholder="Search prompts…" spellcheck="false"></div>
+        <div class="actions">
+          <button class="actionbtn primary" id="scan"><span class="aico">${scanIco}</span> Scan this chat</button>
+        </div>
+        <div class="searchbar">${I.search()}<input id="search" placeholder="Search saved prompts…" spellcheck="false"></div>
         <div class="crumbs" id="crumbs"></div>
         <div class="content" id="content"></div>
       </div>
@@ -97,8 +146,46 @@
 
   const $ = (id) => shadow.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-  // ---- panel open/close ----
+  // ---- per-message hover button ----
+  const hb = $('hoverbtn');
+  let hbMsg = null, hbOver = false, hbTimer = null;
+  function positionHb(el) {
+    const r = el.getBoundingClientRect();
+    if (r.width < 40 || r.bottom < 0 || r.top > innerHeight) { hideHb(); return; }
+    hb.style.left = clamp(r.right - 38, 8, innerWidth - 40) + 'px';
+    hb.style.top = clamp(r.top + 6, 8, innerHeight - 40) + 'px';
+  }
+  function showHb() { hb.classList.add('show'); }
+  function hideHb() { hb.classList.remove('show'); hbMsg = null; }
+
+  document.addEventListener('mouseover', (e) => {
+    const t = e.target;
+    if (!(t instanceof Element) || rootHost.contains(t)) return;
+    const msg = messageAt(t);
+    if (!msg) return;
+    const text = extractText(msg);
+    if (!text || text.length < 2) return;
+    if (msg !== hbMsg) {
+      if (hbMsg) hbMsg.classList.remove('smp-hover-target');
+      msg.classList.add('smp-hover-target');
+    }
+    hbMsg = msg;
+    hb._payload = { text, author: authorOf(msg) };
+    positionHb(msg);
+    showHb();
+  }, true);
+  document.addEventListener('mouseout', () => {
+    clearTimeout(hbTimer);
+    hbTimer = setTimeout(() => { if (!hbOver) { if (hbMsg) hbMsg.classList.remove('smp-hover-target'); hideHb(); } }, 260);
+  }, true);
+  hb.addEventListener('mouseenter', () => { hbOver = true; clearTimeout(hbTimer); });
+  hb.addEventListener('mouseleave', () => { hbOver = false; hideHb(); });
+  hb.addEventListener('click', (e) => { e.stopPropagation(); if (hb._payload) openDialog(hb._payload); });
+  window.addEventListener('scroll', () => { if (hbMsg) positionHb(hbMsg); }, true);
+
+  // ---- panel ----
   const st = { open: false, view: 'root', folder: null, mode: 'grid', query: '' };
   function openPanel() { st.open = true; st.view = 'root'; $('search').value = ''; st.query = ''; $('fab').classList.add('hidden'); $('panel').classList.remove('hidden'); render(); }
   function closePanel() { st.open = false; $('panel').classList.add('hidden'); $('fab').classList.remove('hidden'); }
@@ -109,6 +196,7 @@
   });
   $('addBtn').addEventListener('click', () => openDialog(null));
   $('viewToggle').addEventListener('click', () => { st.mode = st.mode === 'grid' ? 'list' : 'grid'; render(); });
+  $('scan').addEventListener('click', () => { st.view = 'scan'; render(); });
 
   let searchTimer;
   $('search').addEventListener('input', (e) => {
@@ -117,20 +205,6 @@
     searchTimer = setTimeout(() => { st.view = st.query ? 'search' : (st.folder ? 'folder' : 'root'); render(); }, 180);
   });
 
-  // ---- collect button ----
-  function setCollectReady(ready, snippet) {
-    const b = $('collect'); if (!b) return;
-    b.classList.toggle('ready', !!ready);
-    const s = (snippet || '').replace(/\s+/g, ' ').trim();
-    $('chint').textContent = ready ? (s ? `“${s.slice(0, 44)}${s.length > 44 ? '…' : ''}”` : 'Ready — click to collect')
-      : 'Hover a message, then click';
-  }
-  $('collect').addEventListener('click', () => {
-    if (!lastHovered || !lastHovered.text) { toast('Hover a message in the chat first'); return; }
-    openDialog({ text: lastHovered.text, author: lastHovered.author });
-  });
-
-  // ---- header nav state ----
   function updateHeader() {
     const nav = $('nav'), tog = $('viewToggle');
     if (st.view === 'root') { nav.innerHTML = I.close(); nav.title = 'Close'; tog.style.display = 'none'; }
@@ -141,85 +215,103 @@
     }
   }
 
-  // ---- render dispatch ----
+  let rseq = 0;
   async function render() {
+    const seq = ++rseq;
     updateHeader();
     $('crumbs').innerHTML = '';
-    if (st.view === 'root') return renderRoot();
-    if (st.view === 'folder') return renderFolder();
-    if (st.view === 'search') return renderSearch();
+    if (st.view === 'root') return renderRoot(seq);
+    if (st.view === 'scan') return renderScan(seq);
+    if (st.view === 'folder') return renderFolder(seq);
+    if (st.view === 'search') return renderSearch(seq);
   }
 
-  async function renderRoot() {
-    const folders = await S.folders();
+  // ---- scan whole chat ----
+  async function renderScan(seq) {
+    const turns = allTurns();
+    if (seq !== rseq) return;
     const c = $('content');
-    if (!folders.length) {
-      c.innerHTML = `<div class="empty">No prompts yet.<br>Hover a message in ${SOURCE} and hit <b>Collect prompt</b>.</div>`;
+    if (!turns.length) {
+      c.innerHTML = `<div class="empty">Couldn't find messages on this page.<br>Try scrolling the chat once, then Scan again.</div>`;
       return;
     }
-    c.innerHTML = folders.map((f) => `
-      <div class="row" data-folder="${esc(f.name)}">
-        <span class="fico">${I.folder(30)}</span>
-        <span class="rtext"><span class="rtitle">${esc(f.name)} <span class="pill">${f.count}</span></span></span>
-      </div>`).join('');
-    c.querySelectorAll('.row').forEach((r) => r.addEventListener('click', () => {
-      st.folder = r.getAttribute('data-folder'); st.view = 'folder'; st.mode = 'grid'; render();
+    const rows = turns.map((t, i) => `
+      <div class="scanrow"><span class="role ${t.author === 'assistant' ? 'assistant' : ''}">${t.author || 'msg'}</span>
+        <div class="stext">${esc(t.text)}</div>
+        <button class="ssave" data-i="${i}">Save</button></div>`).join('');
+    c.innerHTML = `<div class="scanhead"><span class="count">${turns.length} messages in this chat</span>
+      <span class="saveall gradient-text" id="saveall">Save all prompts</span></div>${rows}`;
+    c.querySelectorAll('.ssave').forEach((b) => b.addEventListener('click', () => {
+      const t = turns[+b.getAttribute('data-i')]; openDialog({ text: t.text, author: t.author });
     }));
+    $('saveall').addEventListener('click', () => saveAll(turns));
   }
 
-  async function renderFolder() {
+  async function saveAll(turns) {
+    const existing = await S.folderNames();
+    const targets = turns.filter((t) => t.author !== 'assistant');
+    const list = targets.length ? targets : turns;
+    for (const t of list) {
+      await S.savePrompt({
+        title: C.deriveTitle(t.text), prompt: C.clean(t.text), template: C.generalize(t.text),
+        folder: C.suggestFolder(t.text, existing), tags: C.suggestTags(t.text), source: SITE.name,
+      });
+    }
+    toast(`Saved ${list.length} prompt${list.length === 1 ? '' : 's'}`);
+    st.view = 'root'; render();
+  }
+
+  // ---- library ----
+  async function renderRoot(seq) {
+    const folders = await S.folders();
+    if (seq !== rseq) return;
+    const c = $('content');
+    if (!folders.length) { c.innerHTML = `<div class="empty">No prompts yet.<br>Hover any message and hit the <b>bookmark</b>, or use <b>Scan this chat</b>.</div>`; return; }
+    c.innerHTML = folders.map((f) => `
+      <div class="row" data-folder="${esc(f.name)}"><span class="fico">${I.folder(30)}</span>
+        <span class="rtext"><span class="rtitle">${esc(f.name)} <span class="pill">${f.count}</span></span></span></div>`).join('');
+    c.querySelectorAll('.row').forEach((r) => r.addEventListener('click', () => { st.folder = r.getAttribute('data-folder'); st.view = 'folder'; st.mode = 'grid'; render(); }));
+  }
+  async function renderFolder(seq) {
     $('crumbs').innerHTML = `<b>${esc(st.folder)}</b>`;
     const prompts = await S.promptsIn(st.folder);
+    if (seq !== rseq) return;
     if (!prompts.length) { $('content').innerHTML = `<div class="empty">Empty folder.</div>`; return; }
-    if (st.mode === 'grid') renderGrid(prompts); else renderList(prompts);
+    st.mode === 'grid' ? renderGrid(prompts) : renderList(prompts);
   }
-
-  async function renderSearch() {
+  async function renderSearch(seq) {
     $('crumbs').innerHTML = `Results for <b>${esc(st.query)}</b>`;
     const prompts = await S.search(st.query);
+    if (seq !== rseq) return;
     if (!prompts.length) { $('content').innerHTML = `<div class="empty">No matches for “${esc(st.query)}”.</div>`; return; }
     renderList(prompts);
   }
-
   function renderGrid(prompts) {
     const c = $('content');
-    c.innerHTML = `<div class="grid">${prompts.map((p) => `
-      <div class="gcard" data-id="${p.id}" title="${esc(p.title)}">${I.folder(30)}<div class="glabel">${esc(p.title)}</div></div>`).join('')}</div>`;
+    c.innerHTML = `<div class="grid">${prompts.map((p) => `<div class="gcard" data-id="${p.id}" title="${esc(p.title)}">${I.folder(30)}<div class="glabel">${esc(p.title)}</div></div>`).join('')}</div>`;
     c.querySelectorAll('.gcard').forEach((g) => g.addEventListener('click', () => copyPrompt(g.getAttribute('data-id'))));
   }
-
   function renderList(prompts) {
     const c = $('content');
     c.innerHTML = prompts.map((p) => {
-      const body = p.prompt || '';
-      const long = body.length > 130;
-      return `<div class="pcard" data-id="${p.id}">
-        <span class="ham">${I.hamburger(16)}</span>
-        <div class="pbody">
-          <div class="ptitle">${esc(p.title)}</div>
-          <div class="ptext ${long ? 'clamp' : ''}">${esc(body)}</div>
-          <div class="prow2">
-            ${long ? `<span class="more gradient-text">more</span>` : ''}
-            <span class="ptags">${(p.tags || []).slice(0, 4).map((t) => `<span class="ptag">#${esc(t)}</span>`).join('')}</span>
-            <button class="copybtn">${I.copy(14)} Copy</button>
-            <button class="delbtn" title="Delete">${I.close(14)}</button>
-          </div>
-        </div></div>`;
+      const long = (p.prompt || '').length > 130;
+      return `<div class="pcard" data-id="${p.id}"><span class="ham">${I.hamburger(16)}</span><div class="pbody">
+        <div class="ptitle">${esc(p.title)}</div><div class="ptext ${long ? 'clamp' : ''}">${esc(p.prompt || '')}</div>
+        <div class="prow2">${long ? `<span class="more gradient-text">more</span>` : ''}
+          <span class="ptags">${(p.tags || []).slice(0, 4).map((t) => `<span class="ptag">#${esc(t)}</span>`).join('')}</span>
+          <button class="copybtn">${I.copy(14)} Copy</button><button class="delbtn" title="Delete">${I.close(14)}</button></div></div></div>`;
     }).join('');
     c.querySelectorAll('.pcard').forEach((card) => {
       const id = card.getAttribute('data-id');
-      const text = card.querySelector('.ptext');
-      const more = card.querySelector('.more');
+      const text = card.querySelector('.ptext'), more = card.querySelector('.more');
       if (more) more.addEventListener('click', () => { const cl = text.classList.toggle('clamp'); more.textContent = cl ? 'more' : 'less'; });
       card.querySelector('.copybtn').addEventListener('click', () => copyPrompt(id));
       card.querySelector('.delbtn').addEventListener('click', async () => { await S.deletePrompt(id); toast('Deleted'); render(); });
     });
   }
 
-  // ---- copy ----
   async function copyPrompt(id) {
-    const all = await S.all();
-    const p = all.find((x) => x.id === id);
+    const p = (await S.all()).find((x) => x.id === id);
     if (!p) return;
     const text = p.prompt || p.template || '';
     try { await navigator.clipboard.writeText(text); }
@@ -238,44 +330,28 @@
       const template = manual ? '' : C.generalize(text);
       const folder = manual ? '' : C.suggestFolder(text, existing);
       dlgTags = manual ? [] : C.suggestTags(text);
-
-      const dh = $('dialogHost');
-      dh.innerHTML = `
-        <div class="overlay" id="overlay">
-          <div class="dialog">
-            <div class="header">
-              <span class="logo">${I.bookmark(20)}</span>
-              <span class="wordmark"><span class="gradient-text">savemyprompt</span><span style="color:#37bda9">.ai</span></span>
-              <span class="grow"></span>
-              <button class="iconbtn" id="dlgClose">${I.close()}</button>
-            </div>
-            <div class="frow"><span class="eyebrow">${manual ? 'New prompt' : 'Save to library'}</span>
-              <span class="src">${manual ? '' : 'from ' + SOURCE}</span></div>
-            <div class="fields">
-              <div class="field"><span class="flabel">Title</span><input class="input" id="d-title" placeholder="Short name" value="${esc(title)}"></div>
-              <div class="field"><span class="flabel">Prompt</span><textarea class="input" id="d-prompt" rows="4" placeholder="The prompt…">${esc(prompt)}</textarea></div>
-              <div class="field"><span class="flabel">Reusable template</span><textarea class="input" id="d-template" rows="3" placeholder="Version with [PLACEHOLDERS]…">${esc(template)}</textarea></div>
-              <div class="field"><span class="flabel">Folder</span>
-                <input class="input" id="d-folder" list="d-folders" placeholder="Category" value="${esc(folder)}">
-                <datalist id="d-folders">${existing.map((f) => `<option value="${esc(f)}">`).join('')}</datalist>
-                <div class="chips" id="d-folder-suggest"></div>
-              </div>
-              <div class="field"><span class="flabel">Tags</span><div class="chips" id="d-tags"></div>
-                <input class="input" id="d-tag" placeholder="Add a tag, press Enter"></div>
-            </div>
-            <div class="footer">
-              <button class="btn ghost" id="d-cancel">Cancel</button>
-              <button class="btn primary" id="d-save">Save</button>
-            </div>
+      $('dialogHost').innerHTML = `
+        <div class="overlay" id="overlay"><div class="dialog">
+          <div class="header"><span class="logo">${I.bookmark(20)}</span>
+            <span class="wordmark"><span class="gradient-text">savemyprompt</span><span style="color:#37bda9">.ai</span></span>
+            <span class="grow"></span><button class="iconbtn" id="dlgClose">${I.close()}</button></div>
+          <div class="frow"><span class="eyebrow">${manual ? 'New prompt' : 'Save to library'}</span><span class="src">${manual ? '' : 'from ' + SITE.name}</span></div>
+          <div class="fields">
+            <div class="field"><span class="flabel">Title</span><input class="input" id="d-title" placeholder="Short name" value="${esc(title)}"></div>
+            <div class="field"><span class="flabel">Prompt</span><textarea class="input" id="d-prompt" rows="4">${esc(prompt)}</textarea></div>
+            <div class="field"><span class="flabel">Reusable template</span><textarea class="input" id="d-template" rows="3" placeholder="Version with [PLACEHOLDERS]…">${esc(template)}</textarea></div>
+            <div class="field"><span class="flabel">Folder</span><input class="input" id="d-folder" list="d-folders" placeholder="Category" value="${esc(folder)}">
+              <datalist id="d-folders">${existing.map((f) => `<option value="${esc(f)}">`).join('')}</datalist>
+              <div class="chips" id="d-folder-suggest"></div></div>
+            <div class="field"><span class="flabel">Tags</span><div class="chips" id="d-tags"></div><input class="input" id="d-tag" placeholder="Add a tag, press Enter"></div>
           </div>
-        </div>`;
+          <div class="footer"><button class="btn ghost" id="d-cancel">Cancel</button><button class="btn primary" id="d-save">Save</button></div>
+        </div></div>`;
       renderDlgTags();
-      // folder suggestions
-      const fs = $('d-folder-suggest');
       const names = [...new Set([folder, ...existing].filter(Boolean))].slice(0, 5);
+      const fs = $('d-folder-suggest');
       fs.innerHTML = names.map((n) => `<span class="chip suggest" data-f="${esc(n)}">${esc(n)}</span>`).join('');
       fs.querySelectorAll('.chip').forEach((ch) => ch.addEventListener('click', () => { $('d-folder').value = ch.getAttribute('data-f'); }));
-
       $('dlgClose').onclick = $('d-cancel').onclick = closeDialog;
       $('overlay').addEventListener('click', (e) => { if (e.target.id === 'overlay') closeDialog(); });
       $('d-tag').addEventListener('keydown', (e) => {
@@ -292,26 +368,18 @@
   function closeDialog() { $('dialogHost').innerHTML = ''; }
   async function saveDialog() {
     const payload = {
-      title: $('d-title').value.trim() || 'Untitled',
-      prompt: $('d-prompt').value.trim(),
-      template: $('d-template').value.trim(),
-      folder: $('d-folder').value.trim() || 'Uncategorized',
-      tags: dlgTags,
-      source: SOURCE,
+      title: $('d-title').value.trim() || 'Untitled', prompt: $('d-prompt').value.trim(),
+      template: $('d-template').value.trim(), folder: $('d-folder').value.trim() || 'Uncategorized',
+      tags: dlgTags, source: SITE.name,
     };
     if (!payload.prompt) { toast('Prompt is empty'); return; }
     await S.savePrompt(payload);
-    closeDialog();
-    toast('Saved to library');
+    closeDialog(); toast('Saved to library');
     if (st.open) render();
   }
 
-  // ---- toast ----
   let toastTimer;
-  function toast(msg) {
-    const t = $('toast'); t.textContent = msg; t.classList.add('show');
-    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1900);
-  }
+  function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1900); }
 
-  console.log('[SaveMyPrompt] ready on', SITE);
+  console.log('[SaveMyPrompt] ready on', SITE.name, SITE.generic ? '(generic)' : '');
 })();
