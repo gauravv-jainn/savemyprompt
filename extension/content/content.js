@@ -11,7 +11,7 @@
 
   // ---- site registry (tuned selectors where known; generic fallback else) ----
   const SITES = {
-    'claude.ai': { name: 'Claude', user: '[data-testid="user-message"]', msg: '[data-testid="user-message"], .font-claude-message' },
+    'claude.ai': { name: 'Claude', user: '[data-testid="user-message"], .font-user-message', msg: '[data-testid="user-message"], .font-user-message, .font-claude-message, [data-test-render-count]' },
     'chatgpt.com': { name: 'ChatGPT', user: '[data-message-author-role="user"]', msg: '[data-message-author-role]' },
     'chat.openai.com': { name: 'ChatGPT', user: '[data-message-author-role="user"]', msg: '[data-message-author-role]' },
     'gemini.google.com': { name: 'Gemini', user: 'user-query, .query-text', msg: 'user-query, .query-text, model-response, .model-response-text, message-content' },
@@ -150,7 +150,7 @@
 
   // ---- per-message hover button ----
   const hb = $('hoverbtn');
-  let hbMsg = null, hbOver = false, hbTimer = null;
+  let hbMsg = null, hbOver = false, hideTimer = null;
   function positionHb(el) {
     const r = el.getBoundingClientRect();
     if (r.width < 40 || r.bottom < 0 || r.top > innerHeight) { hideHb(); return; }
@@ -158,32 +158,31 @@
     hb.style.top = clamp(r.top + 6, 8, innerHeight - 40) + 'px';
   }
   function showHb() { hb.classList.add('show'); }
-  function hideHb() { hb.classList.remove('show'); hbMsg = null; }
+  function clearHighlight() { if (hbMsg) hbMsg.classList.remove('smp-hover-target'); }
+  function hideHb() { hb.classList.remove('show'); clearHighlight(); hbMsg = null; }
+  function scheduleHide() { clearTimeout(hideTimer); hideTimer = setTimeout(() => { if (!hbOver) hideHb(); }, 320); }
 
+  // Single decision point: show when the cursor is over a message, keep it while
+  // stationary, hide only when the cursor moves to a non-message area.
   document.addEventListener('mouseover', (e) => {
     const t = e.target;
-    if (!(t instanceof Element) || rootHost.contains(t)) return;
+    if (!(t instanceof Element)) return;
+    if (rootHost.contains(t)) { clearTimeout(hideTimer); return; } // over our own UI
     const msg = messageAt(t);
-    if (!msg) return;
+    if (!msg) { scheduleHide(); return; }
     const text = extractText(msg);
-    if (!text || text.length < 2) return;
-    if (msg !== hbMsg) {
-      if (hbMsg) hbMsg.classList.remove('smp-hover-target');
-      msg.classList.add('smp-hover-target');
-    }
+    if (!text || text.length < 2) { scheduleHide(); return; }
+    clearTimeout(hideTimer);
+    if (msg !== hbMsg) { clearHighlight(); msg.classList.add('smp-hover-target'); }
     hbMsg = msg;
     hb._payload = { text, author: authorOf(msg) };
     positionHb(msg);
     showHb();
   }, true);
-  document.addEventListener('mouseout', () => {
-    clearTimeout(hbTimer);
-    hbTimer = setTimeout(() => { if (!hbOver) { if (hbMsg) hbMsg.classList.remove('smp-hover-target'); hideHb(); } }, 260);
-  }, true);
-  hb.addEventListener('mouseenter', () => { hbOver = true; clearTimeout(hbTimer); });
-  hb.addEventListener('mouseleave', () => { hbOver = false; hideHb(); });
+  hb.addEventListener('mouseenter', () => { hbOver = true; clearTimeout(hideTimer); });
+  hb.addEventListener('mouseleave', () => { hbOver = false; scheduleHide(); });
   hb.addEventListener('click', (e) => { e.stopPropagation(); if (hb._payload) openDialog(hb._payload); });
-  window.addEventListener('scroll', () => { if (hbMsg) positionHb(hbMsg); }, true);
+  window.addEventListener('scroll', () => { if (hbMsg && hb.classList.contains('show')) positionHb(hbMsg); }, true);
 
   // ---- panel ----
   const st = { open: false, view: 'root', folder: null, mode: 'grid', query: '' };
