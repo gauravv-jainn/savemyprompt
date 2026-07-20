@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "SaveMyPrompt",
+  "version": "1.0.0",
+  "description": "Hover-to-save prompt library for ChatGPT & Claude — cleans prompts into reusable templates. No AI, no account, saves locally.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "SaveMyPrompt library",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "permissions": ["storage", "clipboardWrite"],
+  "host_permissions": [
+    "https://claude.ai/*",
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://claude.ai/*",
+        "https://chatgpt.com/*",
+        "https://chat.openai.com/*"
+      ],
+      "js": ["lib/icons.js", "lib/clean.js", "lib/store.js", "lib/styles.js", "content/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

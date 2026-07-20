@@ -19,3 +19,6 @@ electron/renderer/_qa-button.html
 
 # macOS
 .DS_Store
+
+# Extension QA harness
+extension/_qa.html
