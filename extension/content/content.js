@@ -6,6 +6,17 @@
   if (window.__smpLoaded) return;
   window.__smpLoaded = true;
 
+  // claude.ai / chatgpt.com enforce Trusted Types, which makes innerHTML throw.
+  // Register a default policy (in the content script's isolated world) so our
+  // own generated HTML is accepted — otherwise the whole panel fails to build.
+  try {
+    if (window.trustedTypes && window.trustedTypes.createPolicy && !window.trustedTypes.defaultPolicy) {
+      window.trustedTypes.createPolicy('default', {
+        createHTML: (s) => s, createScript: (s) => s, createScriptURL: (s) => s,
+      });
+    }
+  } catch (e) { /* isolated worlds usually don't enforce TT; ignore if blocked */ }
+
   const I = window.SMPIcons, C = window.SMPClean, S = window.SMPStore;
 
   // A stale content script left over after an extension update throws
