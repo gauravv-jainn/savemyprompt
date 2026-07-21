@@ -185,7 +185,5 @@ textarea.input { resize:vertical; line-height:1.45; min-height:64px; }
   font-size: 11.5px; font-weight: 700; cursor: pointer; align-self: center; }
 `;
 
-/* Page-scoped highlight class (injected into the page, not the shadow root). */
-window.SMP_PAGE_CSS = `
-.smp-hover-target { outline: 2px solid rgba(55,189,169,0.6) !important; outline-offset: 2px; border-radius: 8px; transition: outline-color .12s; }
-`;
+/* No page-level highlight — the hover button is the only affordance. */
+window.SMP_PAGE_CSS = ``;

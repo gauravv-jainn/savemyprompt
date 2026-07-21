@@ -180,8 +180,7 @@
     hb.style.top = clamp(r.top + 6, 8, innerHeight - 40) + 'px';
   }
   function showHb() { hb.classList.add('show'); }
-  function clearHighlight() { if (hbMsg) hbMsg.classList.remove('smp-hover-target'); }
-  function hideHb() { hb.classList.remove('show'); clearHighlight(); hbMsg = null; }
+  function hideHb() { hb.classList.remove('show'); hbMsg = null; }
   function scheduleHide() { clearTimeout(hideTimer); hideTimer = setTimeout(() => { if (!hbOver) hideHb(); }, 320); }
 
   // Single decision point: show when the cursor is over a message, keep it while
@@ -195,7 +194,6 @@
     const text = extractText(msg);
     if (!text || text.length < 2) { scheduleHide(); return; }
     clearTimeout(hideTimer);
-    if (msg !== hbMsg) { clearHighlight(); msg.classList.add('smp-hover-target'); }
     hbMsg = msg;
     hb._payload = { text, author: authorOf(msg) };
     positionHb(msg);
