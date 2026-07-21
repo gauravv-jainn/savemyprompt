@@ -7,6 +7,17 @@
   window.__smpLoaded = true;
 
   const I = window.SMPIcons, C = window.SMPClean, S = window.SMPStore;
+
+  // A stale content script left over after an extension update throws
+  // "Extension context invalidated" on any chrome.* call — map that to a clear
+  // instruction instead of a cryptic error.
+  function friendlyErr(e) {
+    const m = (e && e.message) ? e.message : String(e);
+    if (/context invalidated|Extension context/i.test(m)) return 'Reload this tab — the extension was updated.';
+    return m;
+  }
+
+  try {
   const host = location.host;
 
   // ---- site registry (tuned selectors where known; generic fallback else) ----
@@ -261,7 +272,7 @@
       st.view = 'root'; render();
     } catch (e) {
       console.error('[SaveMyPrompt] save all failed:', e);
-      toast('Save failed: ' + (e && e.message ? e.message : e));
+      toast('Save failed: ' + friendlyErr(e));
     }
   }
 
@@ -385,7 +396,7 @@
       if (st.open) render();
     } catch (e) {
       console.error('[SaveMyPrompt] save failed:', e);
-      toast('Save failed: ' + (e && e.message ? e.message : e));
+      toast('Save failed: ' + friendlyErr(e));
     }
   }
 
@@ -393,4 +404,7 @@
   function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 1900); }
 
   console.log('[SaveMyPrompt] ready on', SITE.name, SITE.generic ? '(generic)' : '');
+  } catch (e) {
+    console.error('[SaveMyPrompt] init failed:', e);
+  }
 })();
